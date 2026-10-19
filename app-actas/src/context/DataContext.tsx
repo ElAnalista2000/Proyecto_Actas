@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { Ally } from '../types';
-import { seedData } from '../seedData';
+import { seedData } from '../data/seedData';
 
 type DataContextType = {
   allies: Ally[];
@@ -13,7 +13,7 @@ const DataContext = createContext<DataContextType | undefined>(undefined);
 export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [allies, setAllies] = useState<Ally[]>(seedData.allies);
 
-  const resetSeedData = () => setAllies(seedData.alies);
+  const resetSeedData = () => setAllies(seedData.allies);
 
   return (
     <DataContext.Provider value={{ allies, setAllies, resetSeedData }}>

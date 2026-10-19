@@ -25,9 +25,10 @@ export const EditDrawer: React.FC<EditDrawerProps> = ({ commit, onClose, onSave 
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value, type, checked } = e.target;
+    const target = e.target;
+    const value = target.type === 'checkbox' && 'checked' in target ? (target as HTMLInputElement).checked : target.value;
     setLocal(prev =>
-      prev ? { ...prev, [name]: type === 'checkbox' ? checked : value } : prev,
+      prev ? { ...prev, [target.name]: value } : prev,
     );
   };
 
