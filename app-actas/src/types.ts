@@ -21,6 +21,10 @@ export interface Ally {
   category?: 'Empresa' | 'Universidad' | 'Gobierno' | 'Gremio' | 'ONG';
   contactEmail?: string;
   contactName?: string;
+  // New tracking fields for the semáforo system
+  lastContactDate?: string; // ISO date of last interaction
+  expectedResponseDate?: string; // ISO date of expected response/deadline
+  responseStatus?: 'ACTIVO' | 'EN_GESTION' | 'INACTIVO'; // Overall ally status
   commitments: Commitment[];
 }
 

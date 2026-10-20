@@ -30,6 +30,9 @@ interface AppContextType {
   restoreInitialData: () => void;
   // Computed
   urgentCount: number;
+  // Theme
+  theme: string;
+  toggleTheme: () => void;
 }
 
 const STORAGE_ALLIES = 'uam_actas_allies';
@@ -64,6 +67,27 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   });
 
   const [selectedAllyId, setSelectedAllyId] = useState<string>('all');
+  // Dark mode state
+  const [theme, setTheme] = useState<string>(() => {
+    const saved = localStorage.getItem('uam_actas_theme');
+    return saved || 'light';
+  });
+
+  const toggleTheme = () => {
+    setTheme(prev => {
+      const next = prev === 'light' ? 'dark' : 'light';
+      localStorage.setItem('uam_actas_theme', next);
+      // Apply class to document.documentElement
+      if (typeof document !== 'undefined') {
+        if (next === 'dark') {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      }
+      return next;
+    });
+  };
   const [selectedActa, setSelectedActa] = useState<Acta | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filterUrgentDays, setFilterUrgentDays] = useState<number | null>(null);
