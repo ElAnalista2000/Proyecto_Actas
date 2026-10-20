@@ -7,7 +7,9 @@ import {
   Upload, 
   RotateCcw, 
   Building2, 
-  Search
+  Search,
+  Moon,
+  Sun
 } from 'lucide-react';
 import mammoth from 'mammoth';
 import { Acta, Commitment } from '../types';
@@ -24,7 +26,9 @@ export const Header: React.FC<{ onUploadClick?: () => void }> = ({ onUploadClick
     searchQuery,
     setSearchQuery,
     restoreInitialData,
-    addActa
+    addActa,
+    theme,
+    toggleTheme
   } = useApp();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -199,17 +203,25 @@ export const Header: React.FC<{ onUploadClick?: () => void }> = ({ onUploadClick
               <span className="md:hidden">Subir</span>
             </button>
 
-            {/* Botón Restaurar Datos Semilla */}
             <button
               onClick={() => {
                 if (window.confirm('¿Deseas restaurar los datos semilla oficiales (Asoandes Acta 3, Armetales Acta 1)?')) {
                   restoreInitialData();
                 }
               }}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 transition"
+              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 dark:border-slate-700 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700 transition"
               title="Restaurar datos iniciales oficiales"
             >
               <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Botón Modo Oscuro */}
+            <button
+              onClick={toggleTheme}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 dark:border-slate-700 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700 transition"
+              title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+            >
+              {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
             </button>
           </div>
 

@@ -1,5 +1,6 @@
 // src/App.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useApp } from './context/AppContext';
 import { AppProvider } from './context/AppContext';
 import { Header } from './components/Header';
 import { AlliesDirectory } from './pages/AlliesDirectory';
@@ -19,6 +20,16 @@ type ViewMode = 'allies' | 'docs' | 'dashboard' | 'kanban' | 'daily';
 
 function MainApp() {
   const [currentView, setCurrentView] = useState<ViewMode>('allies');
+  const { theme } = useApp();
+
+  // Aplica / quita la clase 'dark' en <html> cada vez que cambia el tema
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
 
   const navItems = [
     { id: 'allies' as ViewMode, label: 'Directorio de Aliados', icon: Building2 },
@@ -29,7 +40,7 @@ function MainApp() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800 antialiased selection:bg-indigo-500 selection:text-white">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col font-sans text-slate-800 dark:text-slate-100 antialiased selection:bg-indigo-500 selection:text-white transition-colors duration-300">
       {/* Header Fijo con Selector de Aliados, Alertas y Mammoth Import */}
       <Header />
 

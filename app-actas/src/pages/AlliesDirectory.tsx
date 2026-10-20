@@ -16,6 +16,7 @@ import {
 import { Commitment, Ally } from '../types';
 import { AllyDetailModal } from '../components/AllyDetailModal';
 import { NewAllyModal } from '../components/NewAllyModal';
+import { getSemaforoInfo, getSemaforoBadgeClass } from '../utils/semaforo';
 
 export const AlliesDirectory: React.FC<{ onSelectCommitment?: (c: Commitment) => void }> = () => {
   const { allies, selectedAllyId, setSelectedAllyId, searchQuery } = useApp();
@@ -164,7 +165,17 @@ export const AlliesDirectory: React.FC<{ onSelectCommitment?: (c: Commitment) =>
                     </span>
                   </div>
 
-                  <h3 className="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition truncate" title={ally.name}>
+                  <h3 className="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition truncate flex items-center gap-2" title={ally.name}>
+                    {/* Badge semáforo */}
+                    {(() => {
+                      const sem = getSemaforoInfo(ally);
+                      return (
+                        <span
+                          className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${getSemaforoBadgeClass(sem.color)}`}
+                          title={sem.label}
+                        />
+                      );
+                    })()}
                     {ally.name}
                   </h3>
 
@@ -264,7 +275,21 @@ export const AlliesDirectory: React.FC<{ onSelectCommitment?: (c: Commitment) =>
                       onClick={() => setSelectedAllyForModal(ally)}
                       className="hover:bg-indigo-50/30 transition cursor-pointer"
                     >
-                      <td className="py-3.5 px-4 font-bold text-slate-900">{ally.name}</td>
+                      <td className="py-3.5 px-4 font-bold text-slate-900">
+                        <span className="flex items-center gap-2">
+                          {/* Badge semáforo en tabla */}
+                          {(() => {
+                            const sem = getSemaforoInfo(ally);
+                            return (
+                              <span
+                                className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${getSemaforoBadgeClass(sem.color)}`}
+                                title={sem.label}
+                              />
+                            );
+                          })()}
+                          {ally.name}
+                        </span>
+                      </td>
                       <td className="py-3.5 px-4 text-slate-600">{ally.category || 'General'}</td>
                       <td className="py-3.5 px-4 text-slate-500">{ally.contactName || 'No registrado'}</td>
                       <td className="py-3.5 px-4 font-semibold text-slate-700">{total} compromisos</td>
