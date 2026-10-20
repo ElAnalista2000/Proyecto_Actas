@@ -251,6 +251,19 @@ export const DocumentManagement: React.FC = () => {
                     <Download className="w-3.5 h-3.5" />
                     <span>Descargar PDF</span>
                   </button>
+                  <button
+                    onClick={() => {
+                      const link = document.createElement('a');
+                      link.href = acta.docxUrl ?? '#';
+                      link.download = acta.sourceFileName;
+                      link.click();
+                    }}
+                    className="px-3 py-1.5 text-xs font-semibold bg-gray-600 hover:bg-gray-700 text-white rounded-lg flex items-center gap-1.5 shadow-sm transition"
+                    title="Descargar Word original del acta"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>Descargar Word</span>
+                  </button>
                 </div>
               </div>
             ))}

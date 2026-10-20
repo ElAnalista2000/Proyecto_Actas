@@ -36,6 +36,7 @@ export interface Acta {
   subject: string;           // asunto del acta
   commitments: Commitment[]; // compromisos extraídos de la tabla "4. Compromisos"
   sourceFileName: string;    // nombre del archivo .docx original
+  docxUrl?: string;          // URL to download original Word file
   fingerprint: string;       // huella única para detección de duplicados
   rawHtml?: string;
   allyName?: string;

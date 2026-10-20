@@ -77,6 +77,7 @@ export const Header: React.FC<{ onUploadClick?: () => void }> = ({ onUploadClick
           allyId: metadata.allyId,
           subject: metadata.subject,
           sourceFileName: file.name,
+          docxUrl: URL.createObjectURL(file),
           fingerprint: `${file.name}-${file.size}-${file.lastModified}`,
           commitments,
           rawHtml: html,
