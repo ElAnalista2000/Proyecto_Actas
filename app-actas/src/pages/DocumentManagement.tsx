@@ -1,276 +1,378 @@
-// file:///c:/Users/diego/OneDrive/Documentos/repos/App_Actas/app-actas/src/pages/DocumentManagement.tsx
-import React, { useState } from "react";
-import { Upload, FileCheck, Loader2 } from "lucide-react";
-import { useDocument } from "../context/DocumentContext";
-import { generateFingerprint, parseActaFileName } from "../utils/fileUtils";
-import mammoth from "mammoth";
+// src/pages/DocumentManagement.tsx
+import React, { useState, useRef } from "react";
+import { 
+  Upload, 
+  FileCheck, 
+  FileText, 
+  Download, 
+  Search, 
+  CheckCircle2, 
+  AlertCircle,
+  Eye,
+  Trash2,
+  Calendar,
+  Building2,
+  Sparkles
+} from "lucide-react";
+import { useApp } from "../context/AppContext";
 import html2pdf from "html2pdf.js";
 import { Acta, SignedActa } from "../types";
 
-/** Simple modal for upload report */
-const UploadReportModal: React.FC<{
-  success: Acta[];
-  duplicates: Acta[];
-  onClose: () => void;
-}> = ({ success, duplicates, onClose }) => (
-  <div className="fixed inset-0 z-20 flex items-center justify-center bg-black bg-opacity-50">
-    <div className="w-96 rounded bg-white p-4 shadow-lg">
-      <h3 className="mb-2 text-lg font-semibold">Resumen de carga masiva</h3>
-      {success.length > 0 && (
-        <div className="mb-2 rounded bg-green-100 p-2">
-          <p className="font-medium text-green-800">Actas cargadas correctamente:</p>
-          <ul className="list-disc list-inside text-sm text-green-700">
-            {success.map((a) => (
-              <li key={a.id}>{a.sourceFileName}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {duplicates.length > 0 && (
-        <div className="rounded bg-yellow-100 p-2">
-          <p className="font-medium text-yellow-800">Actas duplicadas omitidas:</p>
-          <ul className="list-disc list-inside text-sm text-yellow-700">
-            {duplicates.map((a) => (
-              <li key={a.id}>{a.sourceFileName}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      <button
-        onClick={onClose}
-        className="mt-3 w-full rounded bg-primary py-1 text-white hover:bg-primary/80"
-      >
-        Cerrar
-      </button>
-    </div>
-  </div>
-);
+export const DocumentManagement: React.FC = () => {
+  const { 
+    actas, 
+    signedActas, 
+    addSignedActa, 
+    selectedAllyId, 
+    searchQuery,
+    setSelectedActa
+  } = useApp();
 
-/** Card para acta sin firmar */
-const UnsignedActaCard: React.FC<{ acta: Acta }> = ({ acta }) => {
-  const downloadPdf = async () => {
-    const element = document.createElement("div");
-    element.innerHTML = `
-      <h1>Acta Nº ${acta.number}</h1>
-      <p>Fecha: ${acta.date}</p>
-      <p>Aliado: ${acta.allyId}</p>
-      <p>Asunto: ${acta.subject}</p>
-      <h2>Compromisos</h2>
-      <ul>${acta.commitments
-        .map((c) => `<li>${c.activity} – ${c.responsible} – ${c.dueDate}</li>`)
-        .join("")}</ul>
+  const [activeTab, setActiveTab] = useState<'actas' | 'signed'>('actas');
+  const [previewActa, setPreviewActa] = useState<Acta | null>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+
+  const filteredActas = actas.filter(a => {
+    const matchesAlly = selectedAllyId === 'all' || a.allyId.toLowerCase() === selectedAllyId.toLowerCase();
+    const matchesSearch = !searchQuery || 
+      a.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      a.number.includes(searchQuery) ||
+      a.allyId.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesAlly && matchesSearch;
+  });
+
+  const filteredSigned = signedActas.filter(s => {
+    const matchesAlly = selectedAllyId === 'all' || s.allyId.toLowerCase() === selectedAllyId.toLowerCase();
+    const matchesSearch = !searchQuery || 
+      s.pdfFileName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.actaNumber.includes(searchQuery);
+    return matchesAlly && matchesSearch;
+  });
+
+  const exportPdf = (acta: Acta) => {
+    const container = document.createElement("div");
+    container.style.padding = "30px";
+    container.style.fontFamily = "sans-serif";
+    container.innerHTML = `
+      <div style="border-bottom: 2px solid #4F46E5; padding-bottom: 15px; margin-bottom: 20px;">
+        <h1 style="color: #1E293B; margin: 0; font-size: 20px;">UNIVERSIDAD AUTÓNOMA DE MANIZALES (UAM)</h1>
+        <h2 style="color: #4F46E5; margin: 5px 0 0 0; font-size: 16px;">DIRECCIÓN DE ALIANZAS - ACTA N° ${acta.number}</h2>
+        <p style="color: #64748B; font-size: 12px; margin: 5px 0 0 0;">Fecha: ${acta.date} | Aliado: ${acta.allyId.toUpperCase()}</p>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <h3 style="font-size: 14px; color: #334155; margin-bottom: 6px;">Asunto / Objeto de la Reunión:</h3>
+        <p style="font-size: 13px; color: #475569; background: #F8FAFC; padding: 10px; border-radius: 6px; border: 1px solid #E2E8F0;">
+          ${acta.subject}
+        </p>
+      </div>
+
+      <div>
+        <h3 style="font-size: 14px; color: #334155; margin-bottom: 10px;">Compromisos y Acuerdos Establecidos:</h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;">
+          <thead>
+            <tr style="background: #F1F5F9; border-bottom: 2px solid #CBD5E1;">
+              <th style="padding: 8px; border: 1px solid #CBD5E1;">#</th>
+              <th style="padding: 8px; border: 1px solid #CBD5E1;">Actividad</th>
+              <th style="padding: 8px; border: 1px solid #CBD5E1;">Responsable</th>
+              <th style="padding: 8px; border: 1px solid #CBD5E1;">Fecha Límite</th>
+              <th style="padding: 8px; border: 1px solid #CBD5E1;">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${acta.commitments.map((c, i) => `
+              <tr style="border-bottom: 1px solid #E2E8F0;">
+                <td style="padding: 8px; border: 1px solid #E2E8F0;">${i + 1}</td>
+                <td style="padding: 8px; border: 1px solid #E2E8F0;">${c.activity}</td>
+                <td style="padding: 8px; border: 1px solid #E2E8F0;">${c.responsible}</td>
+                <td style="padding: 8px; border: 1px solid #E2E8F0;">${c.dueDate}</td>
+                <td style="padding: 8px; border: 1px solid #E2E8F0;">${c.status || (c.completed ? 'CUMPLIDO' : 'PENDIENTE')}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+
+      <div style="margin-top: 40px; display: flex; justify-content: space-between; font-size: 12px; color: #475569;">
+        <div style="border-top: 1px solid #94A3B8; width: 40%; text-align: center; padding-top: 6px;">
+          Firma Dirección de Alianzas UAM
+        </div>
+        <div style="border-top: 1px solid #94A3B8; width: 40%; text-align: center; padding-top: 6px;">
+          Firma Representante Aliado
+        </div>
+      </div>
     `;
-    await html2pdf().from(element).set({ margin: 10, filename: `${acta.sourceFileName}.pdf` }).save();
+
+    const opt = {
+      margin: 10,
+      filename: `Acta_${acta.number}_${acta.allyId}_UAM.pdf`,
+      image: { type: 'jpeg' as const, quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const }
+    };
+
+    (html2pdf() as any).from(container).set(opt).save();
   };
 
-  return (
-    <div className="mb-4 rounded border p-3 shadow">
-      <h4 className="font-medium">{acta.sourceFileName}</h4>
-      <p className="text-sm">Número: {acta.number} | Fecha: {acta.date}</p>
-      <p className="text-sm">Aliado: {acta.allyId}</p>
-      <button
-        onClick={downloadPdf}
-        className="mt-2 rounded bg-primary px-3 py-1 text-sm text-white hover:bg-primary/80"
-      >
-        Descargar PDF
-      </button>
-    </div>
-  );
-};
-
-/** Card para acta firmada */
-const SignedActaCard: React.FC<{ signed: SignedActa }> = ({ signed }) => {
-  return (
-    <div className="mb-4 rounded border p-3 shadow">
-      <h4 className="font-medium">{signed.pdfFileName}</h4>
-      <p className="text-sm">Acta Nº {signed.actaNumber} | Aliado: {signed.allyId}</p>
-      <a
-        href={signed.pdfUrl}
-        download={signed.pdfFileName}
-        className="mt-2 inline-block rounded bg-primary px-3 py-1 text-sm text-white hover:bg-primary/80"
-      >
-        Descargar
-      </a>
-    </div>
-  );
-};
-
-export const DocumentManagement: React.FC = () => {
-  const { unsignedActs, signedActs, addUnsignedActa, addSignedActa, resetDocuments } =
-    useDocument();
-  const [activeTab, setActiveTab] = useState<"unsigned" | "signed">("unsigned");
-  const [loading, setLoading] = useState(false);
-  const [showReport, setShowReport] = useState(false);
-  const [reportSuccess, setReportSuccess] = useState<Acta[]>([]);
-  const [reportDuplicates, setReportDuplicates] = useState<Acta[]>([]);
-
-  /** Handler for .docx upload */
-  const handleDocxUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePdfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files) return;
-    setLoading(true);
-    const successes: Acta[] = [];
-    const dups: Acta[] = [];
+    if (!files || files.length === 0) return;
+
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const fingerprint = generateFingerprint(file);
-      // check duplicate already in context
-      if (unsignedActs.some((a) => a.fingerprint === fingerprint)) {
-        dups.push({
-          id: "dup",
-          number: "",
-          date: "",
-          allyId: "",
-          subject: "",
-          commitments: [],
-          sourceFileName: file.name,
-          fingerprint,
-        } as Acta);
-        continue;
-      }
-      // read file as ArrayBuffer
-      const arrayBuffer = await file.arrayBuffer();
-      const { value: html } = await mammoth.convertToHtml({ arrayBuffer });
-      // simple parser – extract number, date, ally, subject with regexes
-      const txt = html.replace(/<[^>]+>/g, " "); // strip tags
-      const numberMatch = txt.match(/Acta\s*#?\s*(\d+)/i);
-      const dateMatch = txt.match(/Fecha[:\s]+([0-9]{2}\/[0-9]{2}\/[0-9]{4})/i);
-      const allyMatch = txt.match(/Aliado[:\s]+([A-Za-z\s\/&]+)\b/i);
-      const subjectMatch = txt.match(/Asunto[:\s]+([^\n]+)/i);
+      if (!file.name.endsWith('.pdf')) continue;
 
-      // extract commitments table – look for rows inside <table> after "4. Compromisos"
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, "text/html");
-      const table = doc.querySelector("table");
-      const commitments: Acta["commitments"] = [];
-      if (table) {
-        const rows = table.querySelectorAll("tr");
-        rows.forEach((row, idx) => {
-          if (idx === 0) return; // skip header
-          const cells = row.querySelectorAll("td");
-          if (cells.length >= 4) {
-            const activity = cells[1].textContent?.trim() ?? "";
-            const responsible = cells[2].textContent?.trim() ?? "";
-            const due = cells[3].textContent?.trim() ?? "";
-            commitments.push({
-              id: `${file.name}-${idx}`,
-              activity,
-              responsible,
-              dueDate: due,
-            });
-          }
-        });
-      }
-
-      const acta: Acta = {
-        id: `${file.name}-${Date.now()}`,
-        number: numberMatch ? numberMatch[1] : "",
-        date: dateMatch ? dateMatch[1] : "",
-        allyId: allyMatch ? allyMatch[1].trim() : "",
-        subject: subjectMatch ? subjectMatch[1].trim() : "",
-        commitments,
-        sourceFileName: file.name,
-        fingerprint,
+      const numMatch = file.name.match(/\d+/);
+      const actaNum = numMatch ? numMatch[0] : '1';
+      
+      const newSigned: SignedActa = {
+        id: `signed-${Date.now()}-${i}`,
+        actaNumber: actaNum,
+        allyId: selectedAllyId === 'all' ? 'general' : selectedAllyId,
+        pdfFileName: file.name,
+        pdfUrl: URL.createObjectURL(file),
+        fingerprint: `${file.name}-${file.size}-${file.lastModified}`,
+        uploadDate: new Date().toISOString().split('T')[0]
       };
-      addUnsignedActa(acta);
-      successes.push(acta);
-    }
-    setReportSuccess(successes);
-    setReportDuplicates(dups);
-    setShowReport(true);
-    setLoading(false);
-    // reset file input
-    e.target.value = "";
-  };
 
-  /** Handler for signed PDF upload */
-  const handleSignedUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-    const file = files[0];
-    const fingerprint = generateFingerprint(file);
-    if (signedActs.some((s) => s.fingerprint === fingerprint)) {
-      alert("PDF ya cargado previamente");
-      return;
+      addSignedActa(newSigned);
     }
-    const url = URL.createObjectURL(file);
-    // parse filename for ally & acta number (simple split)
-    const { allyName, actaNumber } = parseActaFileName(file.name);
-    const signed: SignedActa = {
-      id: `${file.name}-${Date.now()}`,
-      actaNumber,
-      allyId: allyName,
-      pdfFileName: file.name,
-      pdfUrl: url,
-      fingerprint,
-    };
-    addSignedActa(signed);
-    e.target.value = "";
+
+    if (pdfInputRef.current) pdfInputRef.current.value = '';
+    alert('¡Acta firmada cargada exitosamente en el repositorio!');
   };
 
   return (
-    <div className="pt-16">
-      {/* Tabs */}
-      <div className="flex border-b bg-gray-50">
-        <button
-          className={`px-4 py-2 ${activeTab === "unsigned" ? "border-b-2 border-primary font-medium" : ""}`}
-          onClick={() => setActiveTab("unsigned")}
-        >
-          Actas Sin Firmar (Word .docx → PDF)
-        </button>
-        <button
-          className={`px-4 py-2 ${activeTab === "signed" ? "border-b-2 border-primary font-medium" : ""}`}
-          onClick={() => setActiveTab("signed")}
-        >
-          Actas Firmadas (PDF)
-        </button>
-        <button
-          onClick={resetDocuments}
-          className="ml-auto mr-2 rounded bg-red-600 px-3 py-1 text-sm text-white hover:bg-red-500"
-        >
-          Resetear datos
-        </button>
+    <div className="space-y-6">
+      {/* Header de la vista */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <FileText className="w-5 h-5 text-indigo-600" />
+            Gestión Documental de Actas y Firmas
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Generación oficial de PDFs con html2pdf.js y repositorio de actas firmadas
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Selector de pestañas */}
+          <div className="bg-slate-100 p-0.5 rounded-lg border border-slate-200 flex text-xs font-medium">
+            <button
+              onClick={() => setActiveTab('actas')}
+              className={`px-3 py-1.5 rounded-md transition ${activeTab === 'actas' ? 'bg-white shadow-sm text-slate-900 font-semibold' : 'text-slate-500 hover:text-slate-800'}`}
+            >
+              Actas Generadas ({filteredActas.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('signed')}
+              className={`px-3 py-1.5 rounded-md transition ${activeTab === 'signed' ? 'bg-white shadow-sm text-slate-900 font-semibold' : 'text-slate-500 hover:text-slate-800'}`}
+            >
+              Actas Firmadas ({filteredSigned.length})
+            </button>
+          </div>
+
+          {/* Botón Subir PDF Firmado */}
+          <input 
+            type="file" 
+            ref={pdfInputRef} 
+            onChange={handlePdfUpload} 
+            accept=".pdf" 
+            className="hidden" 
+          />
+          <button
+            onClick={() => pdfInputRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition"
+            title="Subir documento PDF firmado escaneado"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Subir PDF Firmado</span>
+          </button>
+        </div>
       </div>
 
-      <div className="p-4">
-        {activeTab === "unsigned" && (
-          <div>
-            <label className="flex cursor-pointer items-center rounded bg-primary px-4 py-2 text-white hover:bg-primary/80">
-              <Upload className="mr-2 h-5 w-5" />
-              Cargar archivos .docx (masivo)
-              <input type="file" multiple accept=".docx" className="hidden" onChange={handleDocxUpload} disabled={loading} />
-            </label>
-            {loading && <Loader2 className="ml-2 inline animate-spin" />}
-            <hr className="my-4" />
-            <h3 className="mb-2 text-lg font-semibold">Actas cargadas</h3>
-            {unsignedActs.map((a) => (
-              <UnsignedActaCard key={a.id} acta={a} />
+      {/* Contenido según pestaña */}
+      {activeTab === 'actas' ? (
+        filteredActas.length === 0 ? (
+          <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-slate-200">
+            <FileText className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+            <p className="text-sm font-semibold text-slate-700">No hay actas registradas para este filtro</p>
+            <p className="text-xs text-slate-400 mt-1">Usa el botón "Cargar Actas (.docx)" en la barra superior para importar actas Word</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {filteredActas.map(acta => (
+              <div 
+                key={acta.id}
+                className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-5 hover:shadow-md transition flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
+                      Acta N° {acta.number}
+                    </span>
+                    <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      {acta.date}
+                    </span>
+                  </div>
+
+                  <h3 className="text-sm font-bold text-slate-900 leading-snug line-clamp-2 mb-2" title={acta.subject}>
+                    {acta.subject}
+                  </h3>
+
+                  <div className="space-y-1 text-xs text-slate-500 mb-4">
+                    <p className="flex items-center gap-1">
+                      <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                      Aliado: <strong className="text-slate-700 font-semibold">{acta.allyId.toUpperCase()}</strong>
+                    </p>
+                    <p className="text-[11px] text-slate-400 truncate">
+                      Archivo: {acta.sourceFileName}
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-xs">
+                    <span className="font-semibold text-slate-700">
+                      {acta.commitments.length} Compromisos acordados
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                  <button
+                    onClick={() => setPreviewActa(acta)}
+                    className="px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-indigo-600 hover:bg-slate-50 rounded-lg flex items-center gap-1 transition"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>Ver</span>
+                  </button>
+
+                  <button
+                    onClick={() => exportPdf(acta)}
+                    className="px-3 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center gap-1.5 shadow-sm transition"
+                    title="Exportar acta institucional en PDF con html2pdf.js"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Descargar PDF</span>
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
-        )}
+        )
+      ) : (
+        /* Pestaña Actas Firmadas */
+        filteredSigned.length === 0 ? (
+          <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-slate-200">
+            <FileCheck className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+            <p className="text-sm font-semibold text-slate-700">No hay actas firmadas registradas</p>
+            <p className="text-xs text-slate-400 mt-1">Usa el botón "Subir PDF Firmado" para subir un escaneado con firmas de Rectoría</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {filteredSigned.map(signed => (
+              <div 
+                key={signed.id}
+                className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 hover:shadow-md transition flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                      <FileCheck className="w-3.5 h-3.5" />
+                      Firmada - Acta N° {signed.actaNumber}
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      {signed.uploadDate}
+                    </span>
+                  </div>
 
-        {activeTab === "signed" && (
-          <div>
-            <label className="flex cursor-pointer items-center rounded bg-primary px-4 py-2 text-white hover:bg-primary/80">
-              <FileCheck className="mr-2 h-5 w-5" />
-              Subir PDF firmado
-              <input type="file" accept=".pdf" className="hidden" onChange={handleSignedUpload} />
-            </label>
-            <hr className="my-4" />
-            <h3 className="mb-2 text-lg font-semibold">Actas firmadas</h3>
-            {signedActs.map((s) => (
-              <SignedActaCard key={s.id} signed={s} />
+                  <p className="text-xs font-bold text-slate-900 truncate mb-1" title={signed.pdfFileName}>
+                    {signed.pdfFileName}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Aliado: <strong className="text-slate-700">{signed.allyId.toUpperCase()}</strong>
+                  </p>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-end">
+                  {signed.pdfUrl && signed.pdfUrl !== '#' ? (
+                    <a
+                      href={signed.pdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center gap-1 transition"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      Visualizar PDF
+                    </a>
+                  ) : (
+                    <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
+                      <CheckCircle2 className="w-4 h-4" /> Custodia Digital Completa
+                    </span>
+                  )}
+                </div>
+              </div>
             ))}
           </div>
-        )}
-      </div>
+        )
+      )}
 
-      {showReport && (
-        <UploadReportModal
-          success={reportSuccess}
-          duplicates={reportDuplicates}
-          onClose={() => setShowReport(false)}
-        />
+      {/* Modal de Previsualización de Acta */}
+      {previewActa && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <h3 className="text-base font-bold text-slate-900">
+                Detalle del Acta N° {previewActa.number} - {previewActa.allyId.toUpperCase()}
+              </h3>
+              <button 
+                onClick={() => setPreviewActa(null)}
+                className="text-slate-400 hover:text-slate-600 text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="py-4 space-y-4 text-xs">
+              <div>
+                <p className="font-semibold text-slate-500">Asunto Institucional:</p>
+                <p className="text-slate-800 text-sm mt-1">{previewActa.subject}</p>
+              </div>
+
+              <div>
+                <p className="font-semibold text-slate-500 mb-2">Compromisos Vinculados ({previewActa.commitments.length}):</p>
+                <div className="space-y-2">
+                  {previewActa.commitments.map((c, idx) => (
+                    <div key={c.id || idx} className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                      <p className="font-semibold text-slate-900">{c.activity}</p>
+                      <p className="text-slate-500 mt-1">Responsable: {c.responsible} | Fecha límite: {c.dueDate}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
+              <button
+                onClick={() => setPreviewActa(null)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg"
+              >
+                Cerrar
+              </button>
+              <button
+                onClick={() => {
+                  exportPdf(previewActa);
+                  setPreviewActa(null);
+                }}
+                className="px-4 py-2 text-xs font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-1.5"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Descargar en PDF
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

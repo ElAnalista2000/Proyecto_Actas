@@ -1,16 +1,26 @@
-// file:///c:/Users/diego/OneDrive/Documentos/repos/App_Actas/app-actas/src/types.ts
+// src/types.ts
+
+export type CommitmentStatus = 'PENDIENTE' | 'EN_PROCESO' | 'CUMPLIDO';
+
 export interface Commitment {
   id: string;
   activity: string;
   responsible: string;
-  dueDate: string; // ISO (YYYY‑MM‑DD)
+  dueDate: string; // ISO (YYYY-MM-DD)
+  status: CommitmentStatus;
   completed?: boolean;
   completedAt?: string; // ISO
+  actaNumber?: string;
+  allyId?: string;
+  comments?: string;
 }
 
 export interface Ally {
   id: string;
   name: string; // nombre corto y normalizado
+  category?: 'Empresa' | 'Universidad' | 'Gobierno' | 'Gremio' | 'ONG';
+  contactEmail?: string;
+  contactName?: string;
   commitments: Commitment[];
 }
 
@@ -18,7 +28,6 @@ export interface SeedData {
   allies: Ally[];
 }
 
-// ------ Nuevas interfaces para la gestión documental ------
 export interface Acta {
   id: string;                // "<aliado>-<numero>"
   number: string;            // número del acta (ej. "3")
@@ -28,6 +37,7 @@ export interface Acta {
   commitments: Commitment[]; // compromisos extraídos de la tabla "4. Compromisos"
   sourceFileName: string;    // nombre del archivo .docx original
   fingerprint: string;       // huella única para detección de duplicados
+  rawHtml?: string;
 }
 
 export interface SignedActa {
@@ -37,4 +47,5 @@ export interface SignedActa {
   pdfFileName: string;
   pdfUrl: string;           // URL (blob) para previsualizar
   fingerprint: string;      // huella para evitar duplicados
+  uploadDate: string;
 }
