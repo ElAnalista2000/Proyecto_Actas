@@ -354,7 +354,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         updateAlly,
         deleteAlly,
         restoreInitialData,
-        urgentCount
+        urgentCount,
+        theme,
+        toggleTheme
       }}
     >
       {children}
