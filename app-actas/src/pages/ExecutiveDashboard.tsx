@@ -9,7 +9,6 @@ import {
   AlertTriangle, 
   Building2,
   PieChart as PieIcon,
-  Download,
   Calendar
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';

@@ -5,12 +5,7 @@ import {
   Building2, 
   Mail, 
   User, 
-  CheckCircle2, 
-  Clock, 
-  AlertCircle, 
-  ArrowRight,
-  TrendingUp,
-  FileCheck
+  ArrowRight
 } from 'lucide-react';
 import { Commitment } from '../types';
 

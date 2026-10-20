@@ -7,10 +7,7 @@ import {
   CheckCircle2, 
   AlertTriangle, 
   User, 
-  Calendar,
-  Sparkles,
-  ArrowRight,
-  Filter
+  Calendar
 } from 'lucide-react';
 import { Commitment } from '../types';
 import { EditDrawer } from '../components/EditDrawer';

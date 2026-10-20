@@ -12,8 +12,7 @@ import {
   FileText, 
   BarChart3, 
   Layers, 
-  CalendarCheck,
-  ExternalLink
+  CalendarCheck
 } from 'lucide-react';
 
 type ViewMode = 'allies' | 'docs' | 'dashboard' | 'kanban' | 'daily';

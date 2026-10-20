@@ -5,14 +5,10 @@ import {
   FileCheck, 
   FileText, 
   Download, 
-  Search, 
   CheckCircle2, 
-  AlertCircle,
-  Eye,
-  Trash2,
-  Calendar,
-  Building2,
-  Sparkles
+  Eye, 
+  Calendar, 
+  Building2 
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import html2pdf from "html2pdf.js";
@@ -24,8 +20,7 @@ export const DocumentManagement: React.FC = () => {
     signedActas, 
     addSignedActa, 
     selectedAllyId, 
-    searchQuery,
-    setSelectedActa
+    searchQuery
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'actas' | 'signed'>('actas');

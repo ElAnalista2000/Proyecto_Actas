@@ -9,7 +9,6 @@ import {
   Calendar, 
   Edit3,
   Layers,
-  ChevronRight,
   Sparkles
 } from 'lucide-react';
 import { Commitment, CommitmentStatus } from '../types';

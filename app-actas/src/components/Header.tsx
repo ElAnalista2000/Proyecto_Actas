@@ -7,8 +7,7 @@ import {
   Upload, 
   RotateCcw, 
   Building2, 
-  Search,
-  Sparkles
+  Search
 } from 'lucide-react';
 import mammoth from 'mammoth';
 import { Acta, Commitment } from '../types';
