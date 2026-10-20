@@ -95,8 +95,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   const addActa = (newActa: Acta) => {
     setActas(prev => {
-      if (prev.some(a => a.fingerprint === newActa.fingerprint)) return prev;
-      return [newActa, ...prev];
+      const filtered = prev.filter(a => a.fingerprint !== newActa.fingerprint && a.id !== newActa.id);
+      return [newActa, ...filtered];
     });
 
     // Also link commitments to the ally or create ally if not exists
@@ -104,23 +104,35 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       const allyIndex = prev.findIndex(a => a.id.toLowerCase() === newActa.allyId.toLowerCase());
       if (allyIndex >= 0) {
         const existingAlly = prev[allyIndex];
-        const newCommitments = newActa.commitments.filter(
-          nc => !existingAlly.commitments.some(ec => ec.id === nc.id || ec.activity === nc.activity)
+        // Filtrar compromisos genéricos antiguos de fallback
+        const existingCleanCommitments = existingAlly.commitments.filter(
+          c => !c.activity.toLowerCase().includes('revisión y seguimiento integral de acuerdos')
         );
+
+        const newCommitments = newActa.commitments.filter(
+          nc => !existingCleanCommitments.some(
+            ec => ec.id === nc.id || ec.activity.trim().toLowerCase() === nc.activity.trim().toLowerCase()
+          )
+        );
+
         const updated = [...prev];
         updated[allyIndex] = {
           ...existingAlly,
-          commitments: [...existingAlly.commitments, ...newCommitments]
+          name: newActa.allyName || existingAlly.name,
+          category: newActa.category || existingAlly.category,
+          contactName: newActa.contactName || existingAlly.contactName,
+          commitments: [...newCommitments, ...existingCleanCommitments]
         };
         return updated;
       } else {
         const newAlly: Ally = {
           id: newActa.allyId,
-          name: newActa.allyId.charAt(0).toUpperCase() + newActa.allyId.slice(1),
-          category: 'Empresa',
+          name: newActa.allyName || (newActa.allyId.charAt(0).toUpperCase() + newActa.allyId.slice(1)),
+          category: newActa.category || 'Empresa',
+          contactName: newActa.contactName,
           commitments: newActa.commitments
         };
-        return [...prev, newAlly];
+        return [newAlly, ...prev];
       }
     });
   };

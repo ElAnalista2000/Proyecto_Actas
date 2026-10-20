@@ -38,6 +38,9 @@ export interface Acta {
   sourceFileName: string;    // nombre del archivo .docx original
   fingerprint: string;       // huella única para detección de duplicados
   rawHtml?: string;
+  allyName?: string;
+  category?: 'Empresa' | 'Universidad' | 'Gobierno' | 'Gremio' | 'ONG';
+  contactName?: string;
 }
 
 export interface SignedActa {

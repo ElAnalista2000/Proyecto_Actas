@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import mammoth from 'mammoth';
 import { Acta, Commitment } from '../types';
+import { extractActaMetadata, parseCommitmentsFromDocHtml } from '../utils/actaParser';
 
 export const Header: React.FC<{ onUploadClick?: () => void }> = ({ onUploadClick }) => {
   const { 
@@ -32,6 +33,9 @@ export const Header: React.FC<{ onUploadClick?: () => void }> = ({ onUploadClick
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
+    let totalImportedTasks = 0;
+    let lastAllyName = '';
+
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       if (!file.name.endsWith('.docx')) continue;
@@ -41,83 +45,59 @@ export const Header: React.FC<{ onUploadClick?: () => void }> = ({ onUploadClick
         const result = await mammoth.convertToHtml({ arrayBuffer });
         const html = result.value;
 
-        // Clean normalizer for ally name & number
-        const cleanName = file.name.replace(/\.docx$/i, '').replace(/^\[\d{4}-\d{2}-\d{2}\]_?/i, '');
-        const parts = cleanName.split(/[_ -]+/);
-        let allyName = parts[0] || 'Aliado';
-        // Normalización inteligente: cortar títulos largos
-        if (allyName.length > 25) {
-          allyName = allyName.slice(0, 20) + '...';
-        }
-        const allyId = allyName.toLowerCase().replace(/[^a-z0-9]/g, '-');
-        
-        // Extraer número de acta
-        const matchNum = file.name.match(/Acta[_\s-]*(\d+)/i);
-        const actaNumber = matchNum ? matchNum[1] : `${Date.now()}`.slice(-3);
+        // 1. Extraer metadatos institucionales del acta (fecha, número, asunto, aliado, categoría, contacto)
+        const metadata = extractActaMetadata(html, file.name);
 
-        // Simple parser de compromisos o fallback
-        const commitments: Commitment[] = [];
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        const rows = doc.querySelectorAll('tr');
+        // 2. Extraer todos los compromisos pactados de la tabla con el nuevo analizador inteligente
+        const commitments = parseCommitmentsFromDocHtml(
+          html,
+          metadata.allyId,
+          metadata.actaNumber,
+          metadata.meetingDate
+        );
 
-        let cIndex = 1;
-        rows.forEach(row => {
-          const cells = row.querySelectorAll('td, th');
-          if (cells.length >= 3) {
-            const text0 = cells[0].textContent?.trim() || '';
-            const text1 = cells[1].textContent?.trim() || '';
-            const text2 = cells[2].textContent?.trim() || '';
-            // evitar encabezados
-            if (!text0.toLowerCase().includes('actividad') && !text0.toLowerCase().includes('compromiso') && text0.length > 5) {
-              commitments.push({
-                id: `${allyId}-imp-${Date.now()}-${cIndex++}`,
-                activity: text0,
-                responsible: text1 || 'Responsable Asignado',
-                dueDate: text2.match(/\d{4}-\d{2}-\d{2}/) ? text2 : new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
-                status: 'PENDIENTE',
-                completed: false,
-                actaNumber,
-                allyId
-              });
-            }
-          }
-        });
-
-        // Si no encontró tabla, generar un compromiso inicial a partir del documento
+        // Fallback únicamente si el documento no contenía ninguna tabla de compromisos
         if (commitments.length === 0) {
           commitments.push({
-            id: `${allyId}-imp-${Date.now()}-1`,
-            activity: `Revisión y seguimiento integral de acuerdos del Acta N° ${actaNumber}`,
+            id: `${metadata.allyId}-imp-${Date.now()}-1`,
+            activity: `Revisión y seguimiento integral de acuerdos del Acta N° ${metadata.actaNumber}`,
             responsible: 'Dirección de Alianzas UAM',
-            dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+            dueDate: metadata.meetingDate,
             status: 'PENDIENTE',
             completed: false,
-            actaNumber,
-            allyId
+            actaNumber: metadata.actaNumber,
+            allyId: metadata.allyId
           });
         }
 
         const newActa: Acta = {
-          id: `${allyId}-${actaNumber}`,
-          number: actaNumber,
-          date: new Date().toISOString().split('T')[0],
-          allyId,
-          subject: `Acta N° ${actaNumber} de trabajo conjunto con ${allyName}`,
+          id: `${metadata.allyId}-${metadata.actaNumber}`,
+          number: metadata.actaNumber,
+          date: metadata.meetingDate,
+          allyId: metadata.allyId,
+          subject: metadata.subject,
           sourceFileName: file.name,
           fingerprint: `${file.name}-${file.size}-${file.lastModified}`,
           commitments,
-          rawHtml: html
+          rawHtml: html,
+          allyName: metadata.allyName,
+          category: metadata.category,
+          contactName: metadata.contactName
         };
 
         addActa(newActa);
+        totalImportedTasks += commitments.length;
+        lastAllyName = metadata.allyName;
+
+        // Seleccionar automáticamente al aliado en la aplicación
+        setSelectedAllyId(metadata.allyId);
       } catch (err) {
         console.error('Error importando acta docx:', err);
       }
     }
 
     if (fileInputRef.current) fileInputRef.current.value = '';
-    alert('¡Actas importadas y procesadas con éxito por Mammoth.js!');
+    alert(`¡Acta procesada con éxito! Se cargaron ${totalImportedTasks} compromisos para "${lastAllyName}".`);
   };
 
   return (
