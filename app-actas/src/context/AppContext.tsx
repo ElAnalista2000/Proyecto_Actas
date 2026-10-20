@@ -1,11 +1,12 @@
 // src/context/AppContext.tsx
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+// Estado global conectado al backend Netlify (/api/*)
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { Ally, Acta, SignedActa, Commitment, CommitmentStatus } from '../types';
-import { seedData, seedActas, seedSignedActas } from '../data/seedData';
+import { api } from '../hooks/useApi';
 
 interface AppContextType {
   allies: Ally[];
-  selectedAllyId: string; // 'all' or ally.id
+  selectedAllyId: string;
   setSelectedAllyId: (id: string) => void;
   actas: Acta[];
   signedActas: SignedActa[];
@@ -14,20 +15,26 @@ interface AppContextType {
   // Filters & State
   searchQuery: string;
   setSearchQuery: (q: string) => void;
-  filterUrgentDays: number | null; // e.g. 3 for <= 3 days alert
+  filterUrgentDays: number | null;
   setFilterUrgentDays: (days: number | null) => void;
+  filterSemaforo: 'all' | 'red' | 'yellow' | 'green';
+  setFilterSemaforo: (f: 'all' | 'red' | 'yellow' | 'green') => void;
+  // Loading & errors
+  loading: boolean;
+  error: string | null;
   // CRUD Actions
-  addActa: (acta: Acta) => void;
-  addSignedActa: (signed: SignedActa) => void;
-  addCommitment: (allyId: string, item: Omit<Commitment, 'id'> | Commitment) => void;
-  updateCommitment: (updated: Commitment) => void;
-  updateCommitmentStatus: (id: string, status: CommitmentStatus) => void;
-  updateCommitmentResponsible: (id: string, responsible: string) => void;
-  deleteCommitment: (id: string) => void;
-  addAlly: (ally: Ally) => void;
-  updateAlly: (ally: Ally) => void;
-  deleteAlly: (allyId: string) => void;
-  restoreInitialData: () => void;
+  addActa: (acta: Acta, file?: File | null) => Promise<void>;
+  addSignedActa: (signed: SignedActa, file?: File | null) => Promise<void>;
+  addCommitment: (allyId: string, item: Omit<Commitment, 'id'> | Commitment) => Promise<void>;
+  updateCommitment: (updated: Commitment) => Promise<void>;
+  updateCommitmentStatus: (id: string, status: CommitmentStatus) => Promise<void>;
+  updateCommitmentResponsible: (id: string, responsible: string) => Promise<void>;
+  deleteCommitment: (id: string) => Promise<void>;
+  addAlly: (ally: Ally) => Promise<void>;
+  updateAlly: (ally: Ally) => Promise<void>;
+  deleteAlly: (allyId: string) => Promise<void>;
+  restoreInitialData: () => Promise<void>;
+  reloadState: () => Promise<void>;
   // Computed
   urgentCount: number;
   // Theme
@@ -35,330 +42,165 @@ interface AppContextType {
   toggleTheme: () => void;
 }
 
-const STORAGE_ALLIES = 'uam_actas_allies';
-const STORAGE_ACTAS = 'uam_actas_documents';
-const STORAGE_SIGNED = 'uam_actas_signed';
-
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider = ({ children }: { children: ReactNode }) => {
-  const [allies, setAllies] = useState<Ally[]>(() => {
-    const saved = localStorage.getItem(STORAGE_ALLIES);
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { /* ignore */ }
-    }
-    return seedData.allies;
-  });
-
-  const [actas, setActas] = useState<Acta[]>(() => {
-    const saved = localStorage.getItem(STORAGE_ACTAS);
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { /* ignore */ }
-    }
-    return seedActas;
-  });
-
-  const [signedActas, setSignedActas] = useState<SignedActa[]>(() => {
-    const saved = localStorage.getItem(STORAGE_SIGNED);
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { /* ignore */ }
-    }
-    return seedSignedActas;
-  });
-
+  const [allies, setAllies] = useState<Ally[]>([]);
+  const [actas, setActas] = useState<Acta[]>([]);
+  const [signedActas, setSignedActas] = useState<SignedActa[]>([]);
   const [selectedAllyId, setSelectedAllyId] = useState<string>('all');
-  // Dark mode state
-  const [theme, setTheme] = useState<string>(() => {
-    const saved = localStorage.getItem('uam_actas_theme');
-    return saved || 'light';
-  });
+  const [selectedActa, setSelectedActa] = useState<Acta | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [filterUrgentDays, setFilterUrgentDays] = useState<number | null>(null);
+  const [filterSemaforo, setFilterSemaforo] = useState<'all' | 'red' | 'yellow' | 'green'>('all');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Dark mode
+  const [theme, setTheme] = useState<string>(() => localStorage.getItem('uam_actas_theme') || 'light');
 
   const toggleTheme = () => {
     setTheme(prev => {
       const next = prev === 'light' ? 'dark' : 'light';
       localStorage.setItem('uam_actas_theme', next);
-      // Apply class to document.documentElement
-      if (typeof document !== 'undefined') {
-        if (next === 'dark') {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
-      }
+      if (next === 'dark') document.documentElement.classList.add('dark');
+      else document.documentElement.classList.remove('dark');
       return next;
     });
   };
-  const [selectedActa, setSelectedActa] = useState<Acta | null>(null);
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [filterUrgentDays, setFilterUrgentDays] = useState<number | null>(null);
 
+  // Aplica el tema guardado al iniciar
   useEffect(() => {
-    localStorage.setItem(STORAGE_ALLIES, JSON.stringify(allies));
-  }, [allies]);
+    if (theme === 'dark') document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_ACTAS, JSON.stringify(actas));
-  }, [actas]);
+  /** Carga el estado completo desde la API */
+  const reloadState = useCallback(async () => {
+    try {
+      setError(null);
+      const state = await api.getState();
+      setAllies(state.allies);
+      setActas(state.actas);
+      setSignedActas(state.signedActas);
+    } catch (e: any) {
+      setError(e.message || 'Error cargando datos');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_SIGNED, JSON.stringify(signedActas));
-  }, [signedActas]);
+  useEffect(() => { reloadState(); }, [reloadState]);
 
-  const restoreInitialData = () => {
-    localStorage.removeItem(STORAGE_ALLIES);
-    localStorage.removeItem(STORAGE_ACTAS);
-    localStorage.removeItem(STORAGE_SIGNED);
-    setAllies(seedData.allies);
-    setActas(seedActas);
-    setSignedActas(seedSignedActas);
+  // ── Helpers ──────────────────────────────────────────────
+  const applyState = (state: { allies: Ally[]; actas: Acta[]; signedActas: SignedActa[] }) => {
+    setAllies(state.allies);
+    setActas(state.actas);
+    setSignedActas(state.signedActas);
+  };
+
+  // ── Actas ─────────────────────────────────────────────────
+  const addActa = async (acta: Acta, file: File | null = null) => {
+    const state = await api.addActa(acta, file);
+    applyState(state);
+    setSelectedAllyId(acta.allyId);
+  };
+
+  const addSignedActa = async (signed: SignedActa, file: File | null = null) => {
+    const state = await api.addSignedActa(signed, file);
+    applyState(state);
+  };
+
+  // ── Compromisos ───────────────────────────────────────────
+  const addCommitment = async (allyId: string, item: Omit<Commitment, 'id'> | Commitment) => {
+    const newC = await api.addCommitment(allyId, item);
+    setAllies(prev => prev.map(a =>
+      a.id.toLowerCase() === allyId.toLowerCase()
+        ? { ...a, commitments: [newC, ...a.commitments] }
+        : a
+    ));
+  };
+
+  const updateCommitment = async (updated: Commitment) => {
+    const c = await api.updateCommitment(updated);
+    const updater = (prev: Commitment[]) => prev.map(x => x.id === c.id ? c : x);
+    setAllies(prev => prev.map(a => ({ ...a, commitments: updater(a.commitments) })));
+    setActas(prev => prev.map(a => ({ ...a, commitments: updater(a.commitments) })));
+  };
+
+  const updateCommitmentStatus = async (id: string, status: CommitmentStatus) => {
+    const target = allies.flatMap(a => a.commitments).find(c => c.id === id);
+    if (!target) return;
+    await updateCommitment({ ...target, status, completed: status === 'CUMPLIDO' });
+  };
+
+  const updateCommitmentResponsible = async (id: string, responsible: string) => {
+    const target = allies.flatMap(a => a.commitments).find(c => c.id === id);
+    if (!target) return;
+    await updateCommitment({ ...target, responsible });
+  };
+
+  const deleteCommitment = async (id: string) => {
+    await api.deleteCommitment(id);
+    setAllies(prev => prev.map(a => ({ ...a, commitments: a.commitments.filter(c => c.id !== id) })));
+    setActas(prev => prev.map(a => ({ ...a, commitments: a.commitments.filter(c => c.id !== id) })));
+  };
+
+  // ── Aliados ───────────────────────────────────────────────
+  const addAlly = async (ally: Ally) => {
+    const state = await api.addAlly(ally);
+    applyState(state);
+  };
+
+  const updateAlly = async (ally: Ally) => {
+    const state = await api.updateAlly(ally);
+    applyState(state);
+  };
+
+  const deleteAlly = async (allyId: string) => {
+    await api.deleteAlly(allyId);
+    setAllies(prev => prev.filter(a => a.id !== allyId));
+    setActas(prev => prev.filter(a => a.allyId !== allyId));
+    setSignedActas(prev => prev.filter(s => s.allyId !== allyId));
+    if (selectedAllyId === allyId) setSelectedAllyId('all');
+  };
+
+  const restoreInitialData = async () => {
+    setLoading(true);
+    const state = await api.restore();
+    applyState(state);
     setSelectedAllyId('all');
     setSelectedActa(null);
     setSearchQuery('');
     setFilterUrgentDays(null);
+    setFilterSemaforo('all');
+    setLoading(false);
   };
 
-  const addActa = (newActa: Acta) => {
-    setActas(prev => {
-      const filtered = prev.filter(a => a.fingerprint !== newActa.fingerprint && a.id !== newActa.id);
-      return [newActa, ...filtered];
-    });
-
-    // Also link commitments to the ally or create ally if not exists
-    setAllies(prev => {
-      const allyIndex = prev.findIndex(a => a.id.toLowerCase() === newActa.allyId.toLowerCase());
-      if (allyIndex >= 0) {
-        const existingAlly = prev[allyIndex];
-        // Filtrar compromisos genéricos antiguos de fallback
-        const existingCleanCommitments = existingAlly.commitments.filter(
-          c => !c.activity.toLowerCase().includes('revisión y seguimiento integral de acuerdos')
-        );
-
-        const newCommitments = newActa.commitments.filter(
-          nc => !existingCleanCommitments.some(
-            ec => ec.id === nc.id || ec.activity.trim().toLowerCase() === nc.activity.trim().toLowerCase()
-          )
-        );
-
-        const updated = [...prev];
-        updated[allyIndex] = {
-          ...existingAlly,
-          name: newActa.allyName || existingAlly.name,
-          category: newActa.category || existingAlly.category,
-          contactName: newActa.contactName || existingAlly.contactName,
-          commitments: [...newCommitments, ...existingCleanCommitments]
-        };
-        return updated;
-      } else {
-        const newAlly: Ally = {
-          id: newActa.allyId,
-          name: newActa.allyName || (newActa.allyId.charAt(0).toUpperCase() + newActa.allyId.slice(1)),
-          category: newActa.category || 'Empresa',
-          contactName: newActa.contactName,
-          commitments: newActa.commitments
-        };
-        return [newAlly, ...prev];
-      }
-    });
-  };
-
-  const addSignedActa = (newSigned: SignedActa) => {
-    setSignedActas(prev => {
-      if (prev.some(s => s.fingerprint === newSigned.fingerprint)) return prev;
-      return [newSigned, ...prev];
-    });
-  };
-
-  const addCommitment = (allyId: string, item: Omit<Commitment, 'id'> | Commitment) => {
-    const isCompleted = item.status === 'CUMPLIDO' || !!item.completed;
-    const newCommitment: Commitment = {
-      id: 'id' in item && item.id ? item.id : `${allyId}-c-${Date.now()}`,
-      activity: item.activity,
-      responsible: item.responsible || 'Por asignar',
-      dueDate: item.dueDate || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
-      status: item.status || (isCompleted ? 'CUMPLIDO' : 'PENDIENTE'),
-      completed: isCompleted,
-      completedAt: isCompleted ? (item.completedAt || new Date().toISOString().split('T')[0]) : undefined,
-      actaNumber: item.actaNumber || '1',
-      allyId: allyId,
-      comments: item.comments || ''
-    };
-
-    setAllies(prev =>
-      prev.map(ally => {
-        if (ally.id.toLowerCase() === allyId.toLowerCase()) {
-          return {
-            ...ally,
-            commitments: [newCommitment, ...ally.commitments]
-          };
-        }
-        return ally;
-      })
-    );
-
-    // Sync in actas if matches actaNumber
-    if (newCommitment.actaNumber) {
-      setActas(prev =>
-        prev.map(acta => {
-          if (acta.allyId.toLowerCase() === allyId.toLowerCase() && acta.number === newCommitment.actaNumber) {
-            return {
-              ...acta,
-              commitments: [newCommitment, ...acta.commitments]
-            };
-          }
-          return acta;
-        })
-      );
-    }
-  };
-
-  const updateCommitment = (updated: Commitment) => {
-    const isCompleted = updated.status === 'CUMPLIDO' || !!updated.completed;
-    const normalized: Commitment = {
-      ...updated,
-      status: isCompleted ? 'CUMPLIDO' : (updated.status || 'PENDIENTE'),
-      completed: isCompleted,
-      completedAt: isCompleted ? (updated.completedAt || new Date().toISOString().split('T')[0]) : undefined
-    };
-
-    setAllies(prev =>
-      prev.map(ally => ({
-        ...ally,
-        commitments: ally.commitments.map(c => (c.id === normalized.id ? normalized : c))
-      }))
-    );
-
-    setActas(prev =>
-      prev.map(acta => ({
-        ...acta,
-        commitments: acta.commitments.map(c => (c.id === normalized.id ? normalized : c))
-      }))
-    );
-  };
-
-  const updateCommitmentStatus = (id: string, status: CommitmentStatus) => {
-    const isCompleted = status === 'CUMPLIDO';
-    const updater = (c: Commitment): Commitment => {
-      if (c.id === id) {
-        return {
-          ...c,
-          status,
-          completed: isCompleted,
-          completedAt: isCompleted ? (c.completedAt || new Date().toISOString().split('T')[0]) : undefined
-        };
-      }
-      return c;
-    };
-
-    setAllies(prev =>
-      prev.map(ally => ({
-        ...ally,
-        commitments: ally.commitments.map(updater)
-      }))
-    );
-
-    setActas(prev =>
-      prev.map(acta => ({
-        ...acta,
-        commitments: acta.commitments.map(updater)
-      }))
-    );
-  };
-
-  const updateCommitmentResponsible = (id: string, responsible: string) => {
-    const updater = (c: Commitment): Commitment => (c.id === id ? { ...c, responsible } : c);
-    setAllies(prev =>
-      prev.map(ally => ({
-        ...ally,
-        commitments: ally.commitments.map(updater)
-      }))
-    );
-    setActas(prev =>
-      prev.map(acta => ({
-        ...acta,
-        commitments: acta.commitments.map(updater)
-      }))
-    );
-  };
-
-  const deleteCommitment = (id: string) => {
-    setAllies(prev =>
-      prev.map(ally => ({
-        ...ally,
-        commitments: ally.commitments.filter(c => c.id !== id)
-      }))
-    );
-    setActas(prev =>
-      prev.map(acta => ({
-        ...acta,
-        commitments: acta.commitments.filter(c => c.id !== id)
-      }))
-    );
-  };
-
-  const addAlly = (newAlly: Ally) => {
-    setAllies(prev => {
-      if (prev.some(a => a.id.toLowerCase() === newAlly.id.toLowerCase())) {
-        return prev;
-      }
-      return [newAlly, ...prev];
-    });
-  };
-
-  const updateAlly = (updatedAlly: Ally) => {
-    setAllies(prev => prev.map(a => (a.id === updatedAlly.id ? updatedAlly : a)));
-  };
-
-  const deleteAlly = (allyId: string) => {
-    setAllies(prev => prev.filter(a => a.id !== allyId));
-    setActas(prev => prev.filter(a => a.allyId !== allyId));
-    setSignedActas(prev => prev.filter(s => s.allyId !== allyId));
-    if (selectedAllyId === allyId) {
-      setSelectedAllyId('all');
-    }
-  };
-
-  // Urgent commitments calculation (<= 3 days or overdue and not completed)
+  // ── Computed ──────────────────────────────────────────────
   const urgentCount = allies.flatMap(a => a.commitments).filter(c => {
     if (c.status === 'CUMPLIDO' || c.completed) return false;
     if (!c.dueDate) return false;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const due = new Date(c.dueDate);
-    due.setHours(0, 0, 0, 0);
-    const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    return diffDays <= 3;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const due = new Date(c.dueDate); due.setHours(0, 0, 0, 0);
+    return Math.ceil((due.getTime() - today.getTime()) / 86400000) <= 3;
   }).length;
 
   return (
-    <AppContext.Provider
-      value={{
-        allies,
-        selectedAllyId,
-        setSelectedAllyId,
-        actas,
-        signedActas,
-        selectedActa,
-        setSelectedActa,
-        searchQuery,
-        setSearchQuery,
-        filterUrgentDays,
-        setFilterUrgentDays,
-        addActa,
-        addSignedActa,
-        addCommitment,
-        updateCommitment,
-        updateCommitmentStatus,
-        updateCommitmentResponsible,
-        deleteCommitment,
-        addAlly,
-        updateAlly,
-        deleteAlly,
-        restoreInitialData,
-        urgentCount,
-        theme,
-        toggleTheme
-      }}
-    >
+    <AppContext.Provider value={{
+      allies, selectedAllyId, setSelectedAllyId,
+      actas, signedActas, selectedActa, setSelectedActa,
+      searchQuery, setSearchQuery,
+      filterUrgentDays, setFilterUrgentDays,
+      filterSemaforo, setFilterSemaforo,
+      loading, error,
+      addActa, addSignedActa,
+      addCommitment, updateCommitment, updateCommitmentStatus, updateCommitmentResponsible, deleteCommitment,
+      addAlly, updateAlly, deleteAlly,
+      restoreInitialData, reloadState,
+      urgentCount,
+      theme, toggleTheme,
+    }}>
       {children}
     </AppContext.Provider>
   );
@@ -366,8 +208,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
 export const useApp = () => {
   const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useApp must be used within an AppProvider');
-  }
+  if (!context) throw new Error('useApp must be used within an AppProvider');
   return context;
 };
