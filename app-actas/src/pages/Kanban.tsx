@@ -21,7 +21,8 @@ export const Kanban: React.FC = () => {
     searchQuery, 
     filterUrgentDays, 
     updateCommitmentStatus,
-    updateCommitment
+    updateCommitment,
+    deleteCommitment
   } = useApp();
 
   const [editingCommitment, setEditingCommitment] = useState<Commitment | null>(null);
@@ -247,6 +248,7 @@ export const Kanban: React.FC = () => {
           commit={editingCommitment}
           onClose={() => setEditingCommitment(null)}
           onSave={(updated) => updateCommitment(updated)}
+          onDelete={(id) => deleteCommitment(id)}
         />
       )}
     </div>

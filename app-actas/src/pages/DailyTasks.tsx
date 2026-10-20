@@ -18,7 +18,8 @@ export const DailyTasks: React.FC = () => {
     selectedAllyId, 
     searchQuery, 
     updateCommitmentStatus,
-    updateCommitment
+    updateCommitment,
+    deleteCommitment
   } = useApp();
 
   const [editingCommitment, setEditingCommitment] = useState<Commitment | null>(null);
@@ -218,6 +219,7 @@ export const DailyTasks: React.FC = () => {
           commit={editingCommitment}
           onClose={() => setEditingCommitment(null)}
           onSave={(updated) => updateCommitment(updated)}
+          onDelete={(id) => deleteCommitment(id)}
         />
       )}
     </div>

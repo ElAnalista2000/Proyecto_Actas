@@ -19,8 +19,14 @@ interface AppContextType {
   // CRUD Actions
   addActa: (acta: Acta) => void;
   addSignedActa: (signed: SignedActa) => void;
+  addCommitment: (allyId: string, item: Omit<Commitment, 'id'> | Commitment) => void;
   updateCommitment: (updated: Commitment) => void;
   updateCommitmentStatus: (id: string, status: CommitmentStatus) => void;
+  updateCommitmentResponsible: (id: string, responsible: string) => void;
+  deleteCommitment: (id: string) => void;
+  addAlly: (ally: Ally) => void;
+  updateAlly: (ally: Ally) => void;
+  deleteAlly: (allyId: string) => void;
   restoreInitialData: () => void;
   // Computed
   urgentCount: number;
@@ -126,33 +132,153 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
+  const addCommitment = (allyId: string, item: Omit<Commitment, 'id'> | Commitment) => {
+    const isCompleted = item.status === 'CUMPLIDO' || !!item.completed;
+    const newCommitment: Commitment = {
+      id: 'id' in item && item.id ? item.id : `${allyId}-c-${Date.now()}`,
+      activity: item.activity,
+      responsible: item.responsible || 'Por asignar',
+      dueDate: item.dueDate || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+      status: item.status || (isCompleted ? 'CUMPLIDO' : 'PENDIENTE'),
+      completed: isCompleted,
+      completedAt: isCompleted ? (item.completedAt || new Date().toISOString().split('T')[0]) : undefined,
+      actaNumber: item.actaNumber || '1',
+      allyId: allyId,
+      comments: item.comments || ''
+    };
+
+    setAllies(prev =>
+      prev.map(ally => {
+        if (ally.id.toLowerCase() === allyId.toLowerCase()) {
+          return {
+            ...ally,
+            commitments: [newCommitment, ...ally.commitments]
+          };
+        }
+        return ally;
+      })
+    );
+
+    // Sync in actas if matches actaNumber
+    if (newCommitment.actaNumber) {
+      setActas(prev =>
+        prev.map(acta => {
+          if (acta.allyId.toLowerCase() === allyId.toLowerCase() && acta.number === newCommitment.actaNumber) {
+            return {
+              ...acta,
+              commitments: [newCommitment, ...acta.commitments]
+            };
+          }
+          return acta;
+        })
+      );
+    }
+  };
+
   const updateCommitment = (updated: Commitment) => {
+    const isCompleted = updated.status === 'CUMPLIDO' || !!updated.completed;
+    const normalized: Commitment = {
+      ...updated,
+      status: isCompleted ? 'CUMPLIDO' : (updated.status || 'PENDIENTE'),
+      completed: isCompleted,
+      completedAt: isCompleted ? (updated.completedAt || new Date().toISOString().split('T')[0]) : undefined
+    };
+
     setAllies(prev =>
       prev.map(ally => ({
         ...ally,
-        commitments: ally.commitments.map(c => (c.id === updated.id ? updated : c))
+        commitments: ally.commitments.map(c => (c.id === normalized.id ? normalized : c))
+      }))
+    );
+
+    setActas(prev =>
+      prev.map(acta => ({
+        ...acta,
+        commitments: acta.commitments.map(c => (c.id === normalized.id ? normalized : c))
       }))
     );
   };
 
   const updateCommitmentStatus = (id: string, status: CommitmentStatus) => {
     const isCompleted = status === 'CUMPLIDO';
+    const updater = (c: Commitment): Commitment => {
+      if (c.id === id) {
+        return {
+          ...c,
+          status,
+          completed: isCompleted,
+          completedAt: isCompleted ? (c.completedAt || new Date().toISOString().split('T')[0]) : undefined
+        };
+      }
+      return c;
+    };
+
     setAllies(prev =>
       prev.map(ally => ({
         ...ally,
-        commitments: ally.commitments.map(c => {
-          if (c.id === id) {
-            return {
-              ...c,
-              status,
-              completed: isCompleted,
-              completedAt: isCompleted ? (c.completedAt || new Date().toISOString()) : undefined
-            };
-          }
-          return c;
-        })
+        commitments: ally.commitments.map(updater)
       }))
     );
+
+    setActas(prev =>
+      prev.map(acta => ({
+        ...acta,
+        commitments: acta.commitments.map(updater)
+      }))
+    );
+  };
+
+  const updateCommitmentResponsible = (id: string, responsible: string) => {
+    const updater = (c: Commitment): Commitment => (c.id === id ? { ...c, responsible } : c);
+    setAllies(prev =>
+      prev.map(ally => ({
+        ...ally,
+        commitments: ally.commitments.map(updater)
+      }))
+    );
+    setActas(prev =>
+      prev.map(acta => ({
+        ...acta,
+        commitments: acta.commitments.map(updater)
+      }))
+    );
+  };
+
+  const deleteCommitment = (id: string) => {
+    setAllies(prev =>
+      prev.map(ally => ({
+        ...ally,
+        commitments: ally.commitments.filter(c => c.id !== id)
+      }))
+    );
+    setActas(prev =>
+      prev.map(acta => ({
+        ...acta,
+        commitments: acta.commitments.filter(c => c.id !== id)
+      }))
+    );
+  };
+
+  const addAlly = (newAlly: Ally) => {
+    setAllies(prev => {
+      if (prev.some(a => a.id.toLowerCase() === newAlly.id.toLowerCase())) {
+        return prev;
+      }
+      return [newAlly, ...prev];
+    });
+  };
+
+  const updateAlly = (updatedAlly: Ally) => {
+    setAllies(prev => prev.map(a => (a.id === updatedAlly.id ? updatedAlly : a)));
+  };
+
+  const deleteAlly = (allyId: string) => {
+    setAllies(prev => prev.filter(a => a.id !== allyId));
+    setActas(prev => prev.filter(a => a.allyId !== allyId));
+    setSignedActas(prev => prev.filter(s => s.allyId !== allyId));
+    if (selectedAllyId === allyId) {
+      setSelectedAllyId('all');
+    }
   };
 
   // Urgent commitments calculation (<= 3 days or overdue and not completed)
@@ -183,8 +309,14 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setFilterUrgentDays,
         addActa,
         addSignedActa,
+        addCommitment,
         updateCommitment,
         updateCommitmentStatus,
+        updateCommitmentResponsible,
+        deleteCommitment,
+        addAlly,
+        updateAlly,
+        deleteAlly,
         restoreInitialData,
         urgentCount
       }}

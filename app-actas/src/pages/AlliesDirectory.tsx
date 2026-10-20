@@ -5,21 +5,46 @@ import {
   Building2, 
   Mail, 
   User, 
-  ArrowRight
+  ArrowRight,
+  Plus,
+  CheckCircle2,
+  Clock,
+  Layers,
+  Sparkles,
+  FilterX
 } from 'lucide-react';
-import { Commitment } from '../types';
+import { Commitment, Ally } from '../types';
+import { AllyDetailModal } from '../components/AllyDetailModal';
+import { NewAllyModal } from '../components/NewAllyModal';
 
-export const AlliesDirectory: React.FC<{ onSelectCommitment?: (c: Commitment) => void }> = ({ onSelectCommitment }) => {
+export const AlliesDirectory: React.FC<{ onSelectCommitment?: (c: Commitment) => void }> = () => {
   const { allies, selectedAllyId, setSelectedAllyId, searchQuery } = useApp();
   const [activeTab, setActiveTab] = useState<'cards' | 'table'>('cards');
+  
+  // Estado para el modal de detalle del aliado
+  const [selectedAllyForModal, setSelectedAllyForModal] = useState<Ally | null>(null);
+  
+  // Estado para registrar nuevo aliado
+  const [isNewAllyOpen, setIsNewAllyOpen] = useState(false);
+
+  // Mantener actualizado el aliado seleccionado con el estado reactivo del contexto
+  const currentModalAlly = selectedAllyForModal 
+    ? allies.find(a => a.id === selectedAllyForModal.id) || null 
+    : null;
 
   const filteredAllies = allies.filter(ally => {
     const matchesAlly = selectedAllyId === 'all' || ally.id === selectedAllyId;
     const matchesSearch = !searchQuery || 
       ally.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ally.commitments.some(c => c.activity.toLowerCase().includes(searchQuery.toLowerCase()) || c.responsible.toLowerCase().includes(searchQuery.toLowerCase()));
+      (ally.category && ally.category.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      ally.commitments.some(c => 
+        c.activity.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        c.responsible.toLowerCase().includes(searchQuery.toLowerCase())
+      );
     return matchesAlly && matchesSearch;
   });
+
+  const selectedAllyObj = allies.find(a => a.id === selectedAllyId);
 
   return (
     <div className="space-y-6">
@@ -31,11 +56,21 @@ export const AlliesDirectory: React.FC<{ onSelectCommitment?: (c: Commitment) =>
             Directorio y Perfil de Aliados
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Seguimiento institucional de alianzas activas y cumplimiento de acuerdos pactados
+            Haz clic en cualquier aliado para ver sus compromisos, marcar tareas cumplidas, editar responsables y convenios
           </p>
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Botón Nuevo Aliado */}
+          <button
+            onClick={() => setIsNewAllyOpen(true)}
+            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm shadow-indigo-200 transition flex items-center gap-1.5"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Nuevo Aliado</span>
+          </button>
+
+          {/* Toggle Tarjetas / Tabla */}
           <div className="bg-slate-100 p-0.5 rounded-lg border border-slate-200 flex text-xs font-medium">
             <button
               onClick={() => setActiveTab('cards')}
@@ -53,11 +88,55 @@ export const AlliesDirectory: React.FC<{ onSelectCommitment?: (c: Commitment) =>
         </div>
       </div>
 
+      {/* Banner si hay un filtro de aliado activo en el Header */}
+      {selectedAllyId !== 'all' && selectedAllyObj && (
+        <div className="bg-indigo-50/80 border border-indigo-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white font-bold flex items-center justify-center text-xs flex-shrink-0">
+              {selectedAllyObj.name.substring(0, 2).toUpperCase()}
+            </div>
+            <div>
+              <p className="text-xs font-bold text-indigo-950">
+                Filtrando actualmente por: <span className="text-indigo-600 underline font-black">{selectedAllyObj.name}</span>
+              </p>
+              <p className="text-[11px] text-indigo-700">
+                {selectedAllyObj.commitments.length} compromisos registrados ({selectedAllyObj.commitments.filter(c => c.status === 'CUMPLIDO' || c.completed).length} cumplidos)
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSelectedAllyForModal(selectedAllyObj)}
+              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-1.5"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Ver Tareas y Acuerdos</span>
+            </button>
+            <button
+              onClick={() => setSelectedAllyId('all')}
+              className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 text-xs font-semibold rounded-xl transition flex items-center gap-1"
+            >
+              <FilterX className="w-3.5 h-3.5" />
+              <span>Ver Todos</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Contenido principal */}
       {filteredAllies.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-slate-200">
           <Building2 className="w-10 h-10 text-slate-300 mx-auto mb-2" />
           <p className="text-sm font-semibold text-slate-700">No se encontraron aliados que coincidan con los filtros</p>
           <p className="text-xs text-slate-400 mt-1">Prueba seleccionando "Todos los Aliados" o cambiando el término de búsqueda</p>
+          <button
+            onClick={() => {
+              setSelectedAllyId('all');
+            }}
+            className="mt-3 px-3 py-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition"
+          >
+            Restablecer filtro a "Todos los Aliados"
+          </button>
         </div>
       ) : activeTab === 'cards' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -71,15 +150,16 @@ export const AlliesDirectory: React.FC<{ onSelectCommitment?: (c: Commitment) =>
             return (
               <div 
                 key={ally.id}
-                className="bg-white rounded-2xl border border-slate-200/90 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all flex flex-col justify-between overflow-hidden group"
+                onClick={() => setSelectedAllyForModal(ally)}
+                className="bg-white rounded-2xl border border-slate-200/90 shadow-sm hover:shadow-lg hover:border-indigo-300 transition-all duration-200 flex flex-col justify-between overflow-hidden group cursor-pointer relative"
               >
                 {/* Cabecera Tarjeta */}
                 <div className="p-5">
                   <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-xl bg-slate-100 group-hover:bg-indigo-50 group-hover:text-indigo-600 text-slate-700 font-bold flex items-center justify-center text-sm transition">
+                    <div className="w-11 h-11 rounded-2xl bg-slate-100 group-hover:bg-indigo-600 group-hover:text-white text-slate-800 font-extrabold flex items-center justify-center text-sm transition-colors duration-200 shadow-sm">
                       {ally.name.substring(0, 2).toUpperCase()}
                     </div>
-                    <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                    <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
                       {ally.category || 'Aliado'}
                     </span>
                   </div>
@@ -99,7 +179,7 @@ export const AlliesDirectory: React.FC<{ onSelectCommitment?: (c: Commitment) =>
                     {ally.contactEmail && (
                       <p className="flex items-center gap-1.5 truncate">
                         <Mail className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                        <span className="hover:underline text-slate-600">{ally.contactEmail}</span>
+                        <span className="text-slate-600">{ally.contactEmail}</span>
                       </p>
                     )}
                   </div>
@@ -108,7 +188,7 @@ export const AlliesDirectory: React.FC<{ onSelectCommitment?: (c: Commitment) =>
                   <div className="mt-5 pt-4 border-t border-slate-100">
                     <div className="flex justify-between text-xs font-semibold mb-1.5">
                       <span className="text-slate-600">Cumplimiento Acuerdos</span>
-                      <span className="text-indigo-600">{rate}%</span>
+                      <span className="text-indigo-600 font-bold">{rate}%</span>
                     </div>
                     <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                       <div 
@@ -120,33 +200,38 @@ export const AlliesDirectory: React.FC<{ onSelectCommitment?: (c: Commitment) =>
 
                   {/* Badges de estado */}
                   <div className="grid grid-cols-3 gap-2 mt-4 text-center">
-                    <div className="p-2 bg-emerald-50/70 border border-emerald-100 rounded-lg">
-                      <p className="text-xs font-bold text-emerald-700">{completed}</p>
+                    <div className="p-2 bg-emerald-50/80 border border-emerald-100 rounded-xl">
+                      <p className="text-xs font-bold text-emerald-700 flex items-center justify-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        {completed}
+                      </p>
                       <p className="text-[10px] text-emerald-600 font-medium">Cumplidos</p>
                     </div>
-                    <div className="p-2 bg-amber-50/70 border border-amber-100 rounded-lg">
-                      <p className="text-xs font-bold text-amber-700">{inProgress}</p>
+                    <div className="p-2 bg-amber-50/80 border border-amber-100 rounded-xl">
+                      <p className="text-xs font-bold text-amber-700 flex items-center justify-center gap-1">
+                        <Clock className="w-3 h-3 text-amber-600" />
+                        {inProgress}
+                      </p>
                       <p className="text-[10px] text-amber-600 font-medium">En Proceso</p>
                     </div>
-                    <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                    <div className="p-2 bg-slate-50 border border-slate-200 rounded-xl">
                       <p className="text-xs font-bold text-slate-700">{pending}</p>
                       <p className="text-[10px] text-slate-500 font-medium">Pendientes</p>
                     </div>
                   </div>
                 </div>
 
-                {/* Footer de Tarjeta */}
-                <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-                  <span className="text-xs text-slate-500 font-medium">
-                    {total} {total === 1 ? 'compromiso registrado' : 'compromisos registrados'}
+                {/* Footer de Tarjeta con botón interactivo */}
+                <div className="px-5 py-3.5 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between group-hover:bg-indigo-50/40 transition">
+                  <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>{total} {total === 1 ? 'compromiso' : 'compromisos'}</span>
                   </span>
-                  <button 
-                    onClick={() => setSelectedAllyId(ally.id)}
-                    className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 group/btn"
-                  >
-                    <span>Ver detalles</span>
-                    <ArrowRight className="w-3.5 h-3.5 group-hover/btn:translate-x-0.5 transition" />
-                  </button>
+                  
+                  <span className="text-xs font-bold text-indigo-600 group-hover:text-indigo-700 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                    <span>Ver detalles y tareas</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </span>
                 </div>
               </div>
             );
@@ -174,7 +259,11 @@ export const AlliesDirectory: React.FC<{ onSelectCommitment?: (c: Commitment) =>
                   const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
 
                   return (
-                    <tr key={ally.id} className="hover:bg-slate-50/70 transition">
+                    <tr 
+                      key={ally.id} 
+                      onClick={() => setSelectedAllyForModal(ally)}
+                      className="hover:bg-indigo-50/30 transition cursor-pointer"
+                    >
                       <td className="py-3.5 px-4 font-bold text-slate-900">{ally.name}</td>
                       <td className="py-3.5 px-4 text-slate-600">{ally.category || 'General'}</td>
                       <td className="py-3.5 px-4 text-slate-500">{ally.contactName || 'No registrado'}</td>
@@ -189,10 +278,13 @@ export const AlliesDirectory: React.FC<{ onSelectCommitment?: (c: Commitment) =>
                       </td>
                       <td className="py-3.5 px-4 text-right">
                         <button
-                          onClick={() => setSelectedAllyId(ally.id)}
-                          className="px-2.5 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedAllyForModal(ally);
+                          }}
+                          className="px-3 py-1 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition"
                         >
-                          Filtrar
+                          Ver Tareas
                         </button>
                       </td>
                     </tr>
@@ -203,6 +295,23 @@ export const AlliesDirectory: React.FC<{ onSelectCommitment?: (c: Commitment) =>
           </div>
         </div>
       )}
+
+      {/* Modal de Detalle del Aliado (Compromisos, Tareas, Convenios, Edición) */}
+      {currentModalAlly && (
+        <AllyDetailModal
+          ally={currentModalAlly}
+          onClose={() => setSelectedAllyForModal(null)}
+        />
+      )}
+
+      {/* Modal para Crear Nuevo Aliado */}
+      <NewAllyModal
+        isOpen={isNewAllyOpen}
+        onClose={() => setIsNewAllyOpen(false)}
+        onCreated={(newAlly) => {
+          setSelectedAllyForModal(newAlly);
+        }}
+      />
     </div>
   );
 };
